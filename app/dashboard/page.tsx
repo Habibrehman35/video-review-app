@@ -204,7 +204,7 @@ export default async function DashboardPage() {
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-bold text-white text-lg tracking-tight group-hover:text-indigo-400 transition-colors truncate">{camp.title}</h3>
                         
-                        {/* Delete Campaign Form Action */}
+                        {/* Delete Campaign Form Action with Testimonials Clean up */}
                         <form action={async () => {
                           'use server'
                           const cookieStore = await cookies()
@@ -219,7 +219,11 @@ export default async function DashboardPage() {
                               },
                             }
                           )
+                          // 1. Delete associated testimonials first to bypass FK constraint
+                          await supabaseServer.from('testimonials').delete().eq('campaign_id', camp.id)
+                          // 2. Delete the campaign
                           await supabaseServer.from('campaigns').delete().eq('id', camp.id)
+                          
                           redirect('/dashboard')
                         }}>
                           <button
