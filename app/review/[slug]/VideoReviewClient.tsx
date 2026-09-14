@@ -107,7 +107,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
   }, [step])
 
-  // Helper function to find supported mimeType across different browsers (fixes VP9 unsupported codec errors)
+  // Helper function to find supported mimeType across different browsers
   const getSupportedMimeType = () => {
     const types = [
       'video/webm;codecs=vp9,opus',
@@ -138,7 +138,14 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       const mimeType = getSupportedMimeType()
       const options = mimeType ? { mimeType } : {}
 
-      const recorder = new MediaRecorder(stream, options)
+      let recorder: MediaRecorder
+      try {
+        recorder = new MediaRecorder(stream, options)
+      } catch (e) {
+        // Fallback to default browser recorder if options fail
+        recorder = new MediaRecorder(stream)
+      }
+
       mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = (event) => {
@@ -154,18 +161,22 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       }
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' })
-        if (blob.size < 100) {
-          setErrorMessage('Recording failed or was empty. Please check your mic/cam.')
+        const finalType = recorder.mimeType || mimeType || 'video/webm'
+        const blob = new Blob(chunks, { type: finalType })
+        
+        if (blob.size < 500 || chunks.length === 0) {
+          setErrorMessage('Recording was empty or failed. Please check your camera/microphone and try again.')
           setStep('camera')
           return
         }
+
         videoBlobRef.current = blob
         setVideoUrl(URL.createObjectURL(blob))
         setStep('preview')
       }
 
-      recorder.start(250)
+      // Start without timeslice for maximum mobile compatibility
+      recorder.start()
       setStep('recording')
       setTimeLeft(60)
       setErrorMessage('')
