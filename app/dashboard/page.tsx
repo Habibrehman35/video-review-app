@@ -4,12 +4,14 @@ import { redirect } from 'next/navigation'
 import CampaignCreator from '../components/CampaignCreator'
 import TestimonialCard from '../components/TestimonialCard'
 import CopyLinkButton from '../components/CopyLinkButton'
+import DashboardClientFeed from '../components/DashboardClientFeed'
 
 interface Campaign {
   id: string
   title: string
   prompt_question: string
   slug: string
+  expires_at?: string | null
   created_at: string
 }
 
@@ -63,37 +65,42 @@ export default async function DashboardPage() {
     testimonials = tData || []
   }
 
-  // Metrics calculations
   const totalCampaigns = campaignList.length
   const totalTestimonials = testimonials.length
   const approvedCount = testimonials.filter(t => t.status === 'approved').length
   const pendingCount = testimonials.filter(t => t.status === 'pending').length
+  const approvalRate = totalTestimonials > 0 ? Math.round((approvedCount / totalTestimonials) * 100) : 0
 
-const hostUrl = process.env.NEXT_PUBLIC_SITE_URL 
-  || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000')
+  const hostUrl = process.env.NEXT_PUBLIC_SITE_URL 
+    || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000')
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
       
-      {/* Enterprise Navigation Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+      <header className="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/25 text-lg tracking-wider">
               VT
             </div>
             <div>
-              <span className="font-bold text-base tracking-tight text-white">VideoTestimonial</span>
-              <span className="ml-2 px-2 py-0.5 text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">
-                ENTERPRISE
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-base tracking-tight text-white">VideoTestimonial</span>
+                <span className="px-2 py-0.5 text-[10px] font-extrabold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full tracking-wider">
+                  ENTERPRISE
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono">Secure Workspace</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-5">
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-medium text-slate-300">{user.email}</p>
-              <p className="text-[10px] text-emerald-400 font-mono">● System Online</p>
+              <p className="text-xs font-semibold text-slate-200">{user.email}</p>
+              <div className="flex items-center justify-end space-x-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[11px] text-emerald-400 font-mono font-medium">System Online</span>
+              </div>
             </div>
             <form action={async () => {
               'use server'
@@ -114,7 +121,7 @@ const hostUrl = process.env.NEXT_PUBLIC_SITE_URL
             }}>
               <button
                 type="submit"
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
+                className="px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all shadow-sm hover:shadow"
               >
                 Sign Out
               </button>
@@ -123,78 +130,119 @@ const hostUrl = process.env.NEXT_PUBLIC_SITE_URL
         </div>
       </header>
 
-      {/* Main Dashboard Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 lg:p-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-6 lg:p-10 space-y-10">
         
-        {/* Welcome Banner & Action */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 p-6 rounded-2xl border border-indigo-500/20 shadow-xl">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Command Center</h1>
-            <p className="text-sm text-slate-400 mt-1">Monitor review funnels, manage video assets, and orchestrate campaigns.</p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900/90 p-8 rounded-3xl border border-indigo-500/20 shadow-2xl relative overflow-hidden">
+          <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="space-y-1.5 relative z-10">
+            <h1 className="text-3xl font-extrabold tracking-tight text-white">Command Center</h1>
+            <p className="text-sm text-slate-300 max-w-xl">
+              Monitor review pipelines, manage secure video assets, and orchestrate customer feedback funnels with enterprise tooling.
+            </p>
           </div>
-          <CampaignCreator />
-        </div>
-
-        {/* Analytics Metric Cards Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-slate-800/60 border border-slate-700/60 p-5 rounded-2xl backdrop-blur-sm space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Campaigns</p>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-white">{totalCampaigns}</span>
-              <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">Active</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 border border-slate-700/60 p-5 rounded-2xl backdrop-blur-sm space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Reviews</p>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-white">{totalTestimonials}</span>
-              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Collected</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 border border-slate-700/60 p-5 rounded-2xl backdrop-blur-sm space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Approved Reviews</p>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-emerald-400">{approvedCount}</span>
-              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Published</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 border border-slate-700/60 p-5 rounded-2xl backdrop-blur-sm space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Review</p>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-extrabold text-amber-400">{pendingCount}</span>
-              <span className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">Queue</span>
-            </div>
+          <div className="relative z-10">
+            <CampaignCreator />
           </div>
         </div>
 
-        {/* Active Campaigns Section */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-3 shadow-lg">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Campaigns</p>
+            <div className="flex items-baseline justify-between">
+              <span className="text-4xl font-black text-white">{totalCampaigns}</span>
+              <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg font-medium border border-indigo-500/10">Active</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-3 shadow-lg">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Reviews</p>
+            <div className="flex items-baseline justify-between">
+              <span className="text-4xl font-black text-white">{totalTestimonials}</span>
+              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg font-medium border border-emerald-500/10">Collected</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-3 shadow-lg">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Published Rate</p>
+            <div className="flex items-baseline justify-between">
+              <span className="text-4xl font-black text-emerald-400">{approvalRate}%</span>
+              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg font-medium border border-emerald-500/10">{approvedCount} Live</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl backdrop-blur-md space-y-3 shadow-lg">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending Queue</p>
+            <div className="flex items-baseline justify-between">
+              <span className="text-4xl font-black text-amber-400">{pendingCount}</span>
+              <span className="text-xs text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg font-medium border border-amber-500/10">Review Req.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Campaigns Section with Delete Feature */}
+        <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center space-x-3">
               <span>Active Review Campaigns</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{campaignList.length}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700">{campaignList.length}</span>
             </h2>
           </div>
 
           {campaignList.length === 0 ? (
-            <div className="bg-slate-800/40 border border-slate-800 p-8 rounded-2xl text-center text-slate-400 text-sm">
-              No active campaigns found. Create your first campaign above to generate a client review link.
+            <div className="bg-slate-900/40 border border-slate-800/80 p-10 rounded-2xl text-center text-slate-400 text-sm">
+              No active campaigns found. Create your first campaign above to generate a high-converting client review link.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {campaignList.map((camp) => {
                 const reviewUrl = `${hostUrl}/review/${camp.slug}`
+                const isExpired = camp.expires_at ? new Date(camp.expires_at) < new Date() : false
+
                 return (
-                  <div key={camp.id} className="bg-slate-800/70 border border-slate-700/80 p-5 rounded-2xl flex flex-col justify-between space-y-4 shadow-md hover:border-slate-600 transition-all">
-                    <div className="space-y-1.5">
-                      <h3 className="font-bold text-white text-base truncate">{camp.title}</h3>
-                      <p className="text-xs text-slate-400 italic line-clamp-2">&ldquo;{camp.prompt_question}&rdquo;</p>
+                  <div key={camp.id} className="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl flex flex-col justify-between space-y-5 shadow-xl hover:border-slate-700 transition-all group">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-bold text-white text-lg tracking-tight group-hover:text-indigo-400 transition-colors truncate">{camp.title}</h3>
+                        
+                        {/* Delete Campaign Form Action */}
+                        <form action={async () => {
+                          'use server'
+                          const cookieStore = await cookies()
+                          const supabaseServer = createServerClient(
+                            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                            {
+                              cookies: {
+                                get(name: string) {
+                                  return cookieStore.get(name)?.value
+                                },
+                              },
+                            }
+                          )
+                          await supabaseServer.from('campaigns').delete().eq('id', camp.id)
+                          redirect('/dashboard')
+                        }}>
+                          <button
+                            type="submit"
+                            title="Delete Campaign"
+                            className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors text-xs"
+                          >
+                            🗑️
+                          </button>
+                        </form>
+                      </div>
+
+                      <p className="text-xs text-slate-200 font-normal italic line-clamp-2 leading-relaxed">&ldquo;{camp.prompt_question}&rdquo;</p>
+                      
+                      {camp.expires_at && (
+                        <p className={`text-[11px] font-mono font-medium ${isExpired ? 'text-red-400' : 'text-slate-400'}`}>
+                          {isExpired ? '🔴 Expired on: ' : '⏳ Expires: '} {new Date(camp.expires_at).toLocaleString()}
+                        </p>
+                      )}
                     </div>
-                    <div className="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-mono truncate max-w-[170px] bg-slate-900/60 px-2 py-1 rounded border border-slate-800">
+
+                    <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs gap-2">
+                      <span className="text-slate-300 font-mono truncate max-w-[190px] bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 select-all">
                         {reviewUrl}
                       </span>
                       <CopyLinkButton url={reviewUrl} />
@@ -206,29 +254,14 @@ const hostUrl = process.env.NEXT_PUBLIC_SITE_URL
           )}
         </div>
 
-        {/* Testimonials Management Grid */}
-        <div className="space-y-4 pt-4">
+        <div className="space-y-5 pt-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center space-x-3">
               <span>Client Submissions Feed</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{testimonials.length}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700">{testimonials.length}</span>
             </h2>
           </div>
-
-          {testimonials.length === 0 ? (
-            <div className="bg-slate-800/40 border border-slate-800 p-12 rounded-2xl text-center text-slate-400 text-sm space-y-2">
-              <p className="font-medium text-slate-300">No video submissions received yet.</p>
-              <p className="text-xs text-slate-500">Share your campaign links with clients to begin collecting video testimonials.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {testimonials.map((t) => (
-                <div key={t.id} className="bg-slate-800/60 border border-slate-700/80 rounded-2xl overflow-hidden shadow-lg">
-                  <TestimonialCard testimonial={t} />
-                </div>
-              ))}
-            </div>
-          )}
+          <DashboardClientFeed testimonials={testimonials} />
         </div>
 
       </main>
