@@ -39,10 +39,14 @@ export async function createCampaign(formData: FormData) {
 
   const title = (formData.get('title') as string)?.trim()
   const prompt_question = (formData.get('prompt_question') as string)?.trim()
+  const expiresAtInput = (formData.get('expires_at') as string)?.trim()
   
   if (!title || !prompt_question) {
     throw new Error('Validation Error: Title and prompt question are required.')
   }
+
+  // Parse expiry date properly if provided
+  const expires_at = expiresAtInput ? new Date(expiresAtInput).toISOString() : null
 
   // 2. Enterprise Robust Slug Generation (Collision-resistant & sanitized)
   const baseSlug = title
@@ -60,7 +64,8 @@ export async function createCampaign(formData: FormData) {
       title,
       prompt_question,
       slug,
-      user_id: user.id // Injected securely from verified session context
+      user_id: user.id, // Injected securely from verified session context
+      expires_at
     })
     .select()
     .single()

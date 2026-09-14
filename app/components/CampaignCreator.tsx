@@ -34,7 +34,8 @@ export default function CampaignCreator() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
-    const formData = new FormData(e.currentTarget)
+    const formElement = e.currentTarget
+    const formData = new FormData(formElement)
 
     startTransition(async () => {
       try {
@@ -42,7 +43,7 @@ export default function CampaignCreator() {
         setIsOpen(false)
         setTitle('')
         setPrompt('')
-        ;(e.target as HTMLFormElement).reset()
+        formElement.reset()
       } catch (err: unknown) {
         const errorObj = err as Error
         setError(errorObj.message || 'Failed to create campaign')
