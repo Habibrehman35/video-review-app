@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import CampaignCreator from '../components/CampaignCreator'
 import CopyLinkButton from '../components/CopyLinkButton'
 import DashboardClientFeed from '@/app/components/DashboardClientFeed'
@@ -250,7 +251,7 @@ export default async function DashboardPage() {
                           )
                           await supabaseServer.from('testimonials').delete().eq('campaign_id', camp.id)
                           await supabaseServer.from('campaigns').delete().eq('id', camp.id)
-                          redirect('/dashboard')
+                          revalidatePath('/dashboard')
                         }}>
                           <button
                             type="submit"
@@ -308,7 +309,7 @@ export default async function DashboardPage() {
             initialTestimonials={testimonials} 
             onStateChange={async () => {
               'use server'
-              redirect('/dashboard')
+              revalidatePath('/dashboard')
             }} 
           />
         </div>
