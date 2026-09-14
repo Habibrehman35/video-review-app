@@ -40,52 +40,47 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     setStep('camera')
   }
 
-  // Enterprise Camera Initialization with Secure Context Fallbacks
+  // Camera Initialization (Runs once when entering camera/recording, prevents stream resets)
   useEffect(() => {
+    if (step !== 'camera' && step !== 'recording') return
+    if (mediaStream) return // Don't re-initialize if stream is already active
+
     let activeStream: MediaStream | null = null
 
-    if (step === 'camera' || step === 'recording') {
-      const initCamera = async () => {
-        try {
-          setErrorMessage('')
+    const initCamera = async () => {
+      try {
+        setErrorMessage('')
 
-          // Browser Support & Secure Context Check (handles HTTP local IPs gracefully)
-          if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-            throw new Error(
-              window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-                ? 'Camera access requires HTTPS or localhost. Please access via localhost.'
-                : 'Your browser does not support camera recording or permissions are blocked.'
-            )
-          }
-
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-            audio: true,
-          })
-
-          activeStream = stream
-          setMediaStream(stream)
-
-          if (videoPreviewRef.current) {
-            videoPreviewRef.current.srcObject = stream
-          }
-        } catch (err: unknown) {
-          const errorObj = err as Error
-          console.error('Camera initialization failed:', errorObj)
-          setErrorMessage(errorObj.message || 'Camera and microphone access is required. Please check your permissions.')
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+          throw new Error('Your browser does not support camera recording or permissions are blocked.')
         }
-      }
 
-      initCamera()
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          audio: true,
+        })
+
+        activeStream = stream
+        setMediaStream(stream)
+
+        if (videoPreviewRef.current) {
+          videoPreviewRef.current.srcObject = stream
+        }
+      } catch (err: unknown) {
+        const errorObj = err as Error
+        console.error('Camera initialization failed:', errorObj)
+        setErrorMessage(errorObj.message || 'Camera and microphone access is required. Please check your permissions.')
+      }
     }
 
+    initCamera()
+
     return () => {
-      // Cleanup streams safely on unmount or navigation out of camera/recording steps
-      if (activeStream && step !== 'recording') {
+      if (activeStream && step === 'details') {
         activeStream.getTracks().forEach((track) => track.stop())
       }
     }
-  }, [step])
+  }, [step, mediaStream])
 
   // Ensure video element receives stream whenever it renders
   useEffect(() => {
@@ -94,7 +89,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
   }, [mediaStream, step])
 
-  // Start Recording (Fixed handling for immediate recorder drops on mobile/strict browsers)
+  // Start Recording
   const startRecording = () => {
     if (!mediaStream) {
       setErrorMessage('Camera stream not ready. Please try again.')
@@ -112,7 +107,6 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     let recorder: MediaRecorder
 
     try {
-      // Flexible mimeType selection with safe fallbacks
       try {
         recorder = new MediaRecorder(mediaStream, { mimeType: 'video/webm;codecs=vp8,opus' })
       } catch {
@@ -122,7 +116,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
           try {
             recorder = new MediaRecorder(mediaStream, { mimeType: 'video/mp4' })
           } catch {
-            recorder = new MediaRecorder(mediaStream) // Browser default fallback
+            recorder = new MediaRecorder(mediaStream)
           }
         }
       }
@@ -152,7 +146,6 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
         setStep('preview')
       }
 
-      // Start recorder without timeslice or with 1000ms to avoid empty chunk closures on mobile
       recorder.start()
       setMediaRecorder(recorder)
       setStep('recording')
@@ -328,7 +321,11 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
             </div>
             <div className="flex space-x-3">
               <button
-                onClick={() => setStep('camera')}
+                onClick={() => {
+                  setVideoBlob(null)
+                  setVideoUrl(null)
+                  setStep('camera')
+                }}
                 className="w-1/2 py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-lg transition-colors"
               >
                 Re-record
