@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'previous/navigation' // wait, standard is next/navigation
 import { useRouter as useNextRouter } from 'next/navigation'
 
 export default function LoginPage() {
