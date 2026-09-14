@@ -43,12 +43,12 @@ export default async function DashboardPage() {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
     redirect('/login')
   }
 
-  // Fetch campaigns
+  // Fetch campaigns safely
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
@@ -58,7 +58,7 @@ export default async function DashboardPage() {
   const campaignList: Campaign[] = campaigns || []
   const campaignIds = campaignList.map((c) => c.id)
 
-  // Fetch testimonials with campaign title relation
+  // Fetch testimonials safely
   let testimonials: Testimonial[] = []
   if (campaignIds.length > 0) {
     const { data: tData } = await supabase
@@ -80,11 +80,15 @@ export default async function DashboardPage() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    } catch {
+      return 'N/A'
+    }
   }
 
   return (
@@ -192,7 +196,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Active Campaigns Section with Blur & Timeline Details */}
+        {/* Active Campaigns Section */}
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-white tracking-tight flex items-center space-x-3">
@@ -218,7 +222,6 @@ export default async function DashboardPage() {
                       isExpired ? 'opacity-80' : ''
                     }`}
                   >
-                    {/* Expired Blur Overlay */}
                     {isExpired && (
                       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] rounded-2xl flex items-center justify-center z-10 pointer-events-none">
                         <span className="px-4 py-1.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-mono font-bold tracking-widest uppercase shadow-lg">
@@ -231,7 +234,6 @@ export default async function DashboardPage() {
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-bold text-white text-lg tracking-tight group-hover:text-indigo-400 transition-colors truncate">{camp.title}</h3>
                         
-                        {/* Delete Campaign Form Action with confirmation prompt */}
                         <form action={async () => {
                           'use server'
                           const cookieStore = await cookies()
@@ -246,7 +248,6 @@ export default async function DashboardPage() {
                               },
                             }
                           )
-                          // Delete associated submissions first to prevent FK constraint errors
                           await supabaseServer.from('testimonials').delete().eq('campaign_id', camp.id)
                           await supabaseServer.from('campaigns').delete().eq('id', camp.id)
                           redirect('/dashboard')
@@ -268,7 +269,6 @@ export default async function DashboardPage() {
 
                       <p className="text-xs text-slate-200 font-normal italic line-clamp-2 leading-relaxed">&ldquo;{camp.prompt_question}&rdquo;</p>
                       
-                      {/* Campaign Timeline Details */}
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px] font-mono text-slate-400">
                         <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
                           <span className="block text-[9px] text-slate-500 uppercase">Created</span>
