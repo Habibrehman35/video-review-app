@@ -40,7 +40,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     setStep('camera')
   }
 
-  // Camera Initialization (Runs once when entering camera/recording, prevents stream resets)
+  // Camera Initialization
   useEffect(() => {
     if (step !== 'camera' && step !== 'recording') return
     if (mediaStream) return // Don't re-initialize if stream is already active
@@ -89,37 +89,24 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
   }, [mediaStream, step])
 
-  // Start Recording
+  // Start Recording using browser's native default MediaRecorder
   const startRecording = () => {
     if (!mediaStream) {
       setErrorMessage('Camera stream not ready. Please try again.')
       return
     }
 
-    const videoTrack = mediaStream.getVideoTracks()[0]
-    if (!videoTrack || !videoTrack.enabled) {
-      setErrorMessage('Video track is not active. Please re-allow camera access.')
+    if (!mediaStream.active) {
+      setErrorMessage('Camera stream is inactive. Please re-initialize camera.')
       setStep('camera')
       return
     }
 
     const chunks: Blob[] = []
-    let recorder: MediaRecorder
 
     try {
-      try {
-        recorder = new MediaRecorder(mediaStream, { mimeType: 'video/webm;codecs=vp8,opus' })
-      } catch {
-        try {
-          recorder = new MediaRecorder(mediaStream, { mimeType: 'video/webm' })
-        } catch {
-          try {
-            recorder = new MediaRecorder(mediaStream, { mimeType: 'video/mp4' })
-          } catch {
-            recorder = new MediaRecorder(mediaStream)
-          }
-        }
-      }
+      // Let the browser choose its optimal native format automatically
+      const recorder = new MediaRecorder(mediaStream)
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -135,9 +122,10 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' })
+        console.log('Recorded blob size:', blob.size)
         
-        if (blob.size < 200) {
-          setErrorMessage('Recording failed or was too short. Please check camera/mic permissions.')
+        if (blob.size < 100) {
+          setErrorMessage('Recording failed or was empty. Please check camera/mic permissions.')
           setStep('camera')
           return
         }
@@ -157,7 +145,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
         setTimeLeft((prev) => {
           if (prev <= 1) {
             if (timerRef.current) clearInterval(timerRef.current)
-            if (recorder && recorder.state !== 'inactive') {
+            if (recorder && recorder.state === 'recording') {
               recorder.stop()
             }
             return 0
@@ -176,11 +164,8 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
   // Stop Recording
   const stopRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current)
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop()
-    }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((track) => track.stop())
     }
   }
 
@@ -191,11 +176,13 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     setErrorMessage('')
 
     try {
-      const fileName = `${campaign.id}/${Date.now()}-${clientName.replace(/\s+/g, '_')}.webm`
+      const fileExt = videoBlob.type.includes('mp4') ? 'mp4' : 'webm'
+      const fileName = `${campaign.id}/${Date.now()}-${clientName.replace(/\s+/g, '_')}.${fileExt}`
+      
       const { error: uploadError } = await supabase.storage
         .from('testimonials')
         .upload(fileName, videoBlob, {
-          contentType: 'video/webm',
+          contentType: videoBlob.type || 'video/webm',
           upsert: false,
         })
 
