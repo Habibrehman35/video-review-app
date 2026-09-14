@@ -19,12 +19,11 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
   const [errorMessage, setErrorMessage] = useState('')
   
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [timeLeft, setTimeLeft] = useState(60) // Increased to 60s for professional reviews
+  const [timeLeft, setTimeLeft] = useState(60) // 60s for professional reviews
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('')
   const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>('')
-  const [isMicTesting, setIsMicTesting] = useState(false)
 
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -108,6 +107,23 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
   }, [step])
 
+  // Helper function to find supported mimeType across different browsers (fixes VP9 unsupported codec errors)
+  const getSupportedMimeType = () => {
+    const types = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=h264,opus',
+      'video/webm',
+      'video/mp4'
+    ]
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        return type
+      }
+    }
+    return ''
+  }
+
   const startRecording = () => {
     const stream = mediaStreamRef.current
     if (!stream || !stream.active) {
@@ -119,7 +135,10 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     const chunks: Blob[] = []
 
     try {
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' })
+      const mimeType = getSupportedMimeType()
+      const options = mimeType ? { mimeType } : {}
+
+      const recorder = new MediaRecorder(stream, options)
       mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = (event) => {
