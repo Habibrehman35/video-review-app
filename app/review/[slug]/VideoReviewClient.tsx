@@ -57,9 +57,9 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     setStep('camera')
   }
 
-  // Camera & Mic Initialization with selected devices
+  // Camera & Mic Initialization (Only runs on camera step or when devices change)
   useEffect(() => {
-    if (step !== 'camera' && step !== 'recording') return
+    if (step !== 'camera') return
 
     const initCamera = async () => {
       try {
@@ -97,10 +97,9 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
 
     initCamera()
-
-    return () => {}
   }, [step, selectedAudioDevice, selectedVideoDevice])
 
+  // Attach stream to video element when entering recording step
   useEffect(() => {
     if (videoPreviewRef.current && mediaStreamRef.current) {
       videoPreviewRef.current.srcObject = mediaStreamRef.current
@@ -142,7 +141,6 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       try {
         recorder = new MediaRecorder(stream, options)
       } catch (e) {
-        // Fallback to default browser recorder if options fail
         recorder = new MediaRecorder(stream)
       }
 
@@ -175,7 +173,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
         setStep('preview')
       }
 
-      // Start without timeslice for maximum mobile compatibility
+      // Start recording without resetting the stream
       recorder.start()
       setStep('recording')
       setTimeLeft(60)
