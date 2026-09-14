@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import CampaignCreator from '../components/CampaignCreator'
 import TestimonialCard from '../components/TestimonialCard'
 import CopyLinkButton from '../components/CopyLinkButton'
-import DashboardClientFeed from '../components/DashboardClientFeed'
+import DashboardClientFeed from '@/app/components/DashboardClientFeed'
 
 interface Campaign {
   id: string
