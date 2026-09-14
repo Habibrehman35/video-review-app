@@ -15,12 +15,17 @@ interface Testimonial {
   }
 }
 
-export default function DashboardClientFeed({ initialTestimonials }: { initialTestimonials: Testimonial[] }) {
+export default function DashboardClientFeed({ 
+  initialTestimonials, 
+  onStateChange 
+}: { 
+  initialTestimonials: Testimonial[]
+  onStateChange: () => void 
+}) {
   const [testimonials, setTestimonials] = useState<Testimonial[]>(initialTestimonials)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const supabase = createClient()
 
-  // Sync state if initialTestimonials changes from server
   useEffect(() => {
     setTestimonials(initialTestimonials)
   }, [initialTestimonials])
@@ -36,6 +41,7 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
       setTestimonials(prev =>
         prev.map(t => (t.id === id ? { ...t, status: newStatus } : t))
       )
+      onStateChange() // Triggers parent/server revalidation to update pending queue count
     } else {
       alert('Failed to update status: ' + error.message)
     }
@@ -50,6 +56,7 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
 
     if (!error) {
       setTestimonials(prev => prev.filter(t => t.id !== id))
+      onStateChange()
     } else {
       alert('Failed to delete testimonial: ' + error.message)
     }
@@ -59,7 +66,7 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
   if (testimonials.length === 0) {
     return (
       <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-        No testimonials found yet. Share your campaign link to collect reviews!
+        No client submissions found yet.
       </div>
     )
   }
@@ -90,7 +97,7 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
               )}
             </div>
 
-            <div className="flex items-center space-x-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center space-x-2 pt-3 border-ts border-slate-800">
               {item.status !== 'approved' && (
                 <button
                   disabled={loadingId === item.id}
