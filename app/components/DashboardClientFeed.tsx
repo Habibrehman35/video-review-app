@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Testimonial {
@@ -20,6 +20,11 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const supabase = createClient()
 
+  // Sync state if initialTestimonials changes from server
+  useEffect(() => {
+    setTestimonials(initialTestimonials)
+  }, [initialTestimonials])
+
   const updateStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
     setLoadingId(id)
     const { error } = await supabase
@@ -31,19 +36,22 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
       setTestimonials(prev =>
         prev.map(t => (t.id === id ? { ...t, status: newStatus } : t))
       )
+    } else {
+      alert('Failed to update status: ' + error.message)
     }
     setLoadingId(null)
   }
 
-  const deleteTestimonial = async (id: string, videoUrl: string) => {
+  const deleteTestimonial = async (id: string) => {
     if (!confirm('Are you sure you want to delete this testimonial?')) return
     setLoadingId(id)
 
-    // Extract file path from public URL if needed, or delete row directly
     const { error } = await supabase.from('testimonials').delete().eq('id', id)
 
     if (!error) {
       setTestimonials(prev => prev.filter(t => t.id !== id))
+    } else {
+      alert('Failed to delete testimonial: ' + error.message)
     }
     setLoadingId(null)
   }
@@ -87,24 +95,24 @@ export default function DashboardClientFeed({ initialTestimonials }: { initialTe
                 <button
                   disabled={loadingId === item.id}
                   onClick={() => updateStatus(item.id, 'approved')}
-                  className="flex-1 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors"
+                  className="flex-1 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
                 >
-                  Approve
+                  {loadingId === item.id ? 'Updating...' : 'Approve'}
                 </button>
               )}
               {item.status !== 'rejected' && (
                 <button
                   disabled={loadingId === item.id}
                   onClick={() => updateStatus(item.id, 'rejected')}
-                  className="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold transition-colors"
+                  className="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
                 >
-                  Reject
+                  {loadingId === item.id ? 'Updating...' : 'Reject'}
                 </button>
               )}
               <button
                 disabled={loadingId === item.id}
-                onClick={() => deleteTestimonial(item.id, item.video_url)}
-                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs transition-colors"
+                onClick={() => deleteTestimonial(item.id)}
+                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs transition-colors disabled:opacity-50"
                 title="Delete"
               >
                 🗑️
