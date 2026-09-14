@@ -18,14 +18,15 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
   const [clientEmail, setClientEmail] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null)
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
-  const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  
   const [timeLeft, setTimeLeft] = useState(30)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Use REFS for stream and recorder to prevent React re-render crashes
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const videoBlobRef = useRef<Blob | null>(null)
+  
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null)
   const supabase = createClient()
 
@@ -40,12 +41,9 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     setStep('camera')
   }
 
-  // Camera Initialization
+  // Camera Initialization using Refs
   useEffect(() => {
     if (step !== 'camera' && step !== 'recording') return
-    if (mediaStream) return // Don't re-initialize if stream is already active
-
-    let activeStream: MediaStream | null = null
 
     const initCamera = async () => {
       try {
@@ -55,16 +53,16 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
           throw new Error('Your browser does not support camera recording or permissions are blocked.')
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-          audio: true,
-        })
+        if (!mediaStreamRef.current) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+            audio: true,
+          })
+          mediaStreamRef.current = stream
+        }
 
-        activeStream = stream
-        setMediaStream(stream)
-
-        if (videoPreviewRef.current) {
-          videoPreviewRef.current.srcObject = stream
+        if (videoPreviewRef.current && mediaStreamRef.current) {
+          videoPreviewRef.current.srcObject = mediaStreamRef.current
         }
       } catch (err: unknown) {
         const errorObj = err as Error
@@ -76,28 +74,22 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     initCamera()
 
     return () => {
-      if (activeStream && step === 'details') {
-        activeStream.getTracks().forEach((track) => track.stop())
-      }
+      // Cleanup only on unmount
     }
-  }, [step, mediaStream])
+  }, [step])
 
   // Ensure video element receives stream whenever it renders
   useEffect(() => {
-    if (videoPreviewRef.current && mediaStream) {
-      videoPreviewRef.current.srcObject = mediaStream
+    if (videoPreviewRef.current && mediaStreamRef.current) {
+      videoPreviewRef.current.srcObject = mediaStreamRef.current
     }
-  }, [mediaStream, step])
+  }, [step])
 
-  // Start Recording using browser's native default MediaRecorder
+  // Start Recording
   const startRecording = () => {
-    if (!mediaStream) {
+    const stream = mediaStreamRef.current
+    if (!stream || !stream.active) {
       setErrorMessage('Camera stream not ready. Please try again.')
-      return
-    }
-
-    if (!mediaStream.active) {
-      setErrorMessage('Camera stream is inactive. Please re-initialize camera.')
       setStep('camera')
       return
     }
@@ -105,8 +97,8 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     const chunks: Blob[] = []
 
     try {
-      // Let the browser choose its optimal native format automatically
-      const recorder = new MediaRecorder(mediaStream)
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -129,13 +121,12 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
           setStep('camera')
           return
         }
-        setVideoBlob(blob)
+        videoBlobRef.current = blob
         setVideoUrl(URL.createObjectURL(blob))
         setStep('preview')
       }
 
       recorder.start()
-      setMediaRecorder(recorder)
       setStep('recording')
       setTimeLeft(30)
       setErrorMessage('')
@@ -145,8 +136,8 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
         setTimeLeft((prev) => {
           if (prev <= 1) {
             if (timerRef.current) clearInterval(timerRef.current)
-            if (recorder && recorder.state === 'recording') {
-              recorder.stop()
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+              mediaRecorderRef.current.stop()
             }
             return 0
           }
@@ -164,25 +155,26 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
   // Stop Recording
   const stopRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current)
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop()
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop()
     }
   }
 
   // Upload to Supabase Storage & Save Row
   const handleUpload = async () => {
-    if (!videoBlob) return
+    const blob = videoBlobRef.current
+    if (!blob) return
     setStep('uploading')
     setErrorMessage('')
 
     try {
-      const fileExt = videoBlob.type.includes('mp4') ? 'mp4' : 'webm'
+      const fileExt = blob.type.includes('mp4') ? 'mp4' : 'webm'
       const fileName = `${campaign.id}/${Date.now()}-${clientName.replace(/\s+/g, '_')}.${fileExt}`
       
       const { error: uploadError } = await supabase.storage
         .from('testimonials')
-        .upload(fileName, videoBlob, {
-          contentType: videoBlob.type || 'video/webm',
+        .upload(fileName, blob, {
+          contentType: blob.type || 'video/webm',
           upsert: false,
         })
 
@@ -201,6 +193,12 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       })
 
       if (dbError) throw dbError
+
+      // Stop tracks completely after successful submission
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+      }
 
       setStep('success')
     } catch (err: unknown) {
@@ -309,7 +307,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
             <div className="flex space-x-3">
               <button
                 onClick={() => {
-                  setVideoBlob(null)
+                  videoBlobRef.current = null
                   setVideoUrl(null)
                   setStep('camera')
                 }}
