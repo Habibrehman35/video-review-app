@@ -94,7 +94,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     }
   }, [mediaStream, step])
 
-  // Start Recording
+ // Start Recording
   const startRecording = () => {
     if (!mediaStream) {
       setErrorMessage('Camera stream not ready. Please try again.')
@@ -103,15 +103,22 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
     
     const chunks: Blob[] = []
 
+    // Safe MimeType selection for cross-browser compatibility (Chrome, Safari, Firefox, Mobile)
     let mimeType = 'video/webm'
     if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
       mimeType = 'video/webm;codecs=vp8,opus'
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+      mimeType = 'video/webm'
     } else if (MediaRecorder.isTypeSupported('video/mp4')) {
       mimeType = 'video/mp4'
+    } else {
+      mimeType = '' // Let browser pick default if none match
     }
 
     try {
-      const recorder = new MediaRecorder(mediaStream, { mimeType })
+      const recorder = mimeType 
+        ? new MediaRecorder(mediaStream, { mimeType })
+        : new MediaRecorder(mediaStream)
       
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -120,21 +127,33 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       }
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType })
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' })
+        // Check if blob is actually empty or too small (which means recording failed instantly)
+        if (blob.size < 100) {
+          setErrorMessage('Recording failed to capture data. Please try again.')
+          setStep('camera')
+          return
+        }
         setVideoBlob(blob)
         setVideoUrl(URL.createObjectURL(blob))
         setStep('preview')
       }
 
-      recorder.start(1000)
+      // Start recording with timeslice to ensure data chunks flow continuously
+      recorder.start(250)
       setMediaRecorder(recorder)
       setStep('recording')
       setTimeLeft(30)
+      setErrorMessage('')
 
+      if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            stopRecording()
+            if (timerRef.current) clearInterval(timerRef.current)
+            if (recorder.state !== 'inactive') {
+              recorder.stop()
+            }
             return 0
           }
           return prev - 1
@@ -144,6 +163,7 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
       const errorObj = err as Error
       console.error('Recorder error:', errorObj)
       setErrorMessage('Could not start media recorder: ' + errorObj.message)
+      setStep('camera')
     }
   }
 
