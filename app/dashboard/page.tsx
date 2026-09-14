@@ -69,7 +69,8 @@ export default async function DashboardPage() {
   const approvedCount = testimonials.filter(t => t.status === 'approved').length
   const pendingCount = testimonials.filter(t => t.status === 'pending').length
 
-  const hostUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+const hostUrl = process.env.NEXT_PUBLIC_SITE_URL 
+  || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000')
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
