@@ -261,7 +261,7 @@ export default async function DashboardPage() {
               <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700">{testimonials.length}</span>
             </h2>
           </div>
-          <DashboardClientFeed testimonials={testimonials} />
+          <DashboardClientFeed initialTestimonials={testimonials} />
         </div>
 
       </main>
