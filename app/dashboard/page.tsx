@@ -132,9 +132,23 @@ export default function TestimonialDashboard() {
     }
   }, [router, supabase])
 
+  // Updated Robust Sign Out Handler (Session & Storage Clear)
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Sign out error:', error.message)
+      }
+    } catch (err) {
+      console.error('Unexpected error during sign out:', err)
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.clear()
+        sessionStorage.clear()
+      }
+      router.replace('/login')
+      router.refresh()
+    }
   }
 
   // Real Database Campaign Creation
