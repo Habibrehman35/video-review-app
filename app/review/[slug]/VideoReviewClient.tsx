@@ -229,7 +229,8 @@ export default function VideoReviewClient({ campaign }: { campaign: Campaign }) 
         .from('testimonials')
         .getPublicUrl(fileName)
 
-      const { error: dbError } = await supabase.from('testimonials').insert({
+      // Fixed: Insert into 'submissions' table instead of 'testimonials'
+      const { error: dbError } = await supabase.from('submissions').insert({
         campaign_id: campaign.id,
         client_name: clientName,
         client_email: clientEmail,
