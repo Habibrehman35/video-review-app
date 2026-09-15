@@ -1,10 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import CampaignCreator from '../components/CampaignCreator'
 import CopyLinkButton from '../components/CopyLinkButton'
 import DashboardClientFeed from '@/app/components/DashboardClientFeed'
-import { revalidatePath } from 'next/cache'
+
+export const dynamic = 'force-dynamic'
 
 interface Campaign {
   id: string
@@ -23,10 +25,14 @@ interface Testimonial {
   video_url: string
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
+  campaigns?: {
+    title: string
+  }
 }
 
 export default async function DashboardPage() {
   const cookieStore = await cookies()
+  
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,16 +41,26 @@ export default async function DashboardPage() {
         get(name: string) {
           return cookieStore.get(name)?.value
         },
+        set(name: string, value: string, options: any) {
+          try {
+            cookieStore.set({ name, value, ...options })
+          } catch {}
+        },
+        remove(name: string, options: any) {
+          try {
+            cookieStore.set({ name, value: '', ...options })
+          } catch {}
+        },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
     redirect('/login')
   }
 
-  // Fetch campaigns
+  // Fetch campaigns safely
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
@@ -54,15 +70,15 @@ export default async function DashboardPage() {
   const campaignList: Campaign[] = campaigns || []
   const campaignIds = campaignList.map((c) => c.id)
 
-  // Fetch testimonials
+  // Fetch testimonials safely
   let testimonials: Testimonial[] = []
   if (campaignIds.length > 0) {
     const { data: tData } = await supabase
       .from('testimonials')
-      .select('*')
+      .select('*, campaigns(title)')
       .in('campaign_id', campaignIds)
       .order('created_at', { ascending: false })
-    testimonials = tData || []
+    testimonials = (tData as Testimonial[]) || []
   }
 
   const totalCampaigns = campaignList.length
@@ -74,13 +90,17 @@ export default async function DashboardPage() {
   const hostUrl = process.env.NEXT_PUBLIC_SITE_URL 
     || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000')
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return 'Never'
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    } catch {
+      return 'Never'
+    }
   }
 
   return (
@@ -188,7 +208,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Active Campaigns Section with Blur & Timeline Details */}
+        {/* Active Campaigns Section */}
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-white tracking-tight flex items-center space-x-3">
@@ -205,7 +225,12 @@ export default async function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {campaignList.map((camp) => {
                 const reviewUrl = `${hostUrl}/review/${camp.slug}`
-                const isExpired = camp.expires_at ? new Date(camp.expires_at) < new Date() : false
+                let isExpired = false
+                try {
+                  isExpired = camp.expires_at ? new Date(camp.expires_at).getTime() < Date.now() : false
+                } catch {
+                  isExpired = false
+                }
 
                 return (
                   <div 
@@ -214,9 +239,8 @@ export default async function DashboardPage() {
                       isExpired ? 'opacity-80' : ''
                     }`}
                   >
-                    {/* Expired Blur Overlay */}
                     {isExpired && (
-                      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] rounded-2xl flex items-center justify-center z-10 pointer-events-none">
+                      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] rounded-2xl flex items-center justify-center z-10 pointer-events-none">
                         <span className="px-4 py-1.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-mono font-bold tracking-widest uppercase shadow-lg">
                           Expired Campaign
                         </span>
@@ -227,7 +251,6 @@ export default async function DashboardPage() {
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-bold text-white text-lg tracking-tight group-hover:text-indigo-400 transition-colors truncate">{camp.title}</h3>
                         
-                        {/* Delete Campaign Form Action */}
                         <form action={async () => {
                           'use server'
                           const cookieStore = await cookies()
@@ -244,12 +267,17 @@ export default async function DashboardPage() {
                           )
                           await supabaseServer.from('testimonials').delete().eq('campaign_id', camp.id)
                           await supabaseServer.from('campaigns').delete().eq('id', camp.id)
-                          redirect('/dashboard')
+                          revalidatePath('/dashboard')
                         }}>
                           <button
                             type="submit"
                             title="Delete Campaign"
-                            className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors text-xs"
+                            onClick={(e) => {
+                              if (!confirm('Are you sure you want to delete this campaign and its submissions?')) {
+                                e.preventDefault()
+                              }
+                            }}
+                            className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-xs"
                           >
                             🗑️
                           </button>
@@ -258,7 +286,6 @@ export default async function DashboardPage() {
 
                       <p className="text-xs text-slate-200 font-normal italic line-clamp-2 leading-relaxed">&ldquo;{camp.prompt_question}&rdquo;</p>
                       
-                      {/* Campaign Timeline Details */}
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px] font-mono text-slate-400">
                         <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
                           <span className="block text-[9px] text-slate-500 uppercase">Created</span>
@@ -267,7 +294,7 @@ export default async function DashboardPage() {
                         <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
                           <span className="block text-[9px] text-slate-500 uppercase">Expires</span>
                           <span className={isExpired ? 'text-red-400 font-bold' : 'text-emerald-400'}>
-                            {camp.expires_at ? formatDate(camp.expires_at) : 'Never'}
+                            {formatDate(camp.expires_at)}
                           </span>
                         </div>
                       </div>
