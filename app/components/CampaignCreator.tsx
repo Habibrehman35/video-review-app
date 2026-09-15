@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { createCampaign } from '@/app/dashboard/actions'
 
 const TEMPLATE_PRESETS = [
@@ -19,6 +20,7 @@ const TEMPLATE_PRESETS = [
 ]
 
 export default function CampaignCreator() {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -40,10 +42,15 @@ export default function CampaignCreator() {
     startTransition(async () => {
       try {
         await createCampaign(formData)
+        
+        // Modal close aur form reset karein
         setIsOpen(false)
         setTitle('')
         setPrompt('')
         formElement.reset()
+
+        // 🔑 ASAL FIX: Next.js router cache refresh karein taake dashboard par foran campaign show ho jaye
+        router.refresh()
       } catch (err: unknown) {
         const errorObj = err as Error
         setError(errorObj.message || 'Failed to create campaign')
