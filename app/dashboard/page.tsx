@@ -77,7 +77,6 @@ export default function TestimonialDashboard() {
         }
 
         // 2. Fetch Video Submissions for user's campaigns
-        // Assuming submissions table has campaign relationship or user linkage
         const { data: subData, error: subError } = await supabase
           .from('submissions')
           .select('*, campaigns(title)')
@@ -153,7 +152,7 @@ export default function TestimonialDashboard() {
     }
   }
 
-  const handleDeleteCampaign = async (id: string, slug: string) => {
+  const handleDeleteCampaign = async (id: string) => {
     if (!confirm('Are you sure you want to delete this campaign?')) return
 
     const { error } = await supabase
@@ -277,7 +276,7 @@ export default function TestimonialDashboard() {
                           Copy Link
                         </button>
                         <button 
-                          onClick={() => handleDeleteCampaign(camp.id, camp.slug)}
+                          onClick={() => handleDeleteCampaign(camp.id)}
                           className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium rounded-lg transition-all"
                         >
                           Delete
@@ -310,8 +309,8 @@ export default function TestimonialDashboard() {
                     <div className="space-y-1">
                       <span className="text-xs font-medium text-indigo-400">{sub.campaigns?.title || 'Review Campaign'}</span>
                       <h3 className="text-sm font-bold text-white">
-                        {sub.clientName || 'Anonymous Client'} 
-                        {sub.clientEmail && <span className="text-xs text-slate-400 font-normal"> ({sub.clientEmail})</span>}
+                        {sub.client_name || 'Anonymous Client'} 
+                        {sub.client_email && <span className="text-xs text-slate-400 font-normal"> ({sub.client_email})</span>}
                       </h3>
                       <p className="text-[10px] text-slate-400 font-mono">
                         Submitted: {new Date(sub.created_at).toLocaleString()}
