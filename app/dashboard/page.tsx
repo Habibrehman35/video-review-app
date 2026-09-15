@@ -132,7 +132,6 @@ export default function TestimonialDashboard() {
     }
   }, [router, supabase])
 
-  // Updated Robust Sign Out Handler (Session & Storage Clear)
   const handleSignOut = async () => {
     try {
       const { error } = await supabase.auth.signOut()
@@ -198,11 +197,21 @@ export default function TestimonialDashboard() {
     }
   }
 
-  // Updated Delete Handler: Campaign delete hoga lekin submissions safe rahengi
+  // Safe Delete Handler: Campaign delete hoga lekin submissions/videos safe rahengi
   const handleDeleteCampaign = async (id: string) => {
     if (!confirm('Are you sure you want to delete this campaign? (Aapki video submissions safe rahengi)')) return
 
-    // Campaign delete karein (Supabase table mein FK par ON DELETE SET NULL hona chahiye)
+    // 1. Pehle sub-missions ka campaign_id disconnect kar dein taake wo database se delete na hon
+    const { error: updateSubError } = await supabase
+      .from('submissions')
+      .update({ campaign_id: null })
+      .eq('campaign_id', id)
+
+    if (updateSubError) {
+      console.error('Error unlinking submissions:', updateSubError.message)
+    }
+
+    // 2. Ab campaign ko safely delete karein
     const { error } = await supabase
       .from('campaigns')
       .delete()
