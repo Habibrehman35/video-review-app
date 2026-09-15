@@ -13,29 +13,21 @@ export default function TestimonialDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [campaignTitle, setCampaignTitle] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
-  const [welcomeMessage, setWelcomeMessage] = useState('Hi! Please record a short video sharing your experience with our service.')
+  const [baseUrl, setBaseUrl] = useState('https://video-review-74lcd430w-habibrehman35.vercel.app')
 
   // Campaigns State
   const [campaigns, setCampaigns] = useState([
     { 
-      id: 'cmp_01', 
+      id: 'han-bhai-4h9qx', 
       title: 'Salim Winding Tech - Client Feedback', 
       expiry: '2026-04-15', 
-      link: 'https://videoreview.app/record/cmp_01', 
+      link: 'https://video-review-74lcd430w-habibrehman35.vercel.app/review/han-bhai-4h9qx', 
       submissions: 4, 
-      status: 'Active' 
-    },
-    { 
-      id: 'cmp_02', 
-      title: 'Barrett Hodgson Product Review', 
-      expiry: '2026-03-30', 
-      link: 'https://videoreview.app/record/cmp_02', 
-      submissions: 7, 
       status: 'Active' 
     },
   ])
 
-  // Submissions State (Videos recorded by clients)
+  // Submissions State
   const [submissions, setSubmissions] = useState([
     { 
       id: 'sub_101', 
@@ -44,15 +36,6 @@ export default function TestimonialDashboard() {
       clientEmail: 'ahmed@example.com', 
       duration: '01:45', 
       submittedAt: '10 mins ago',
-      videoUrl: '#' 
-    },
-    { 
-      id: 'sub_102', 
-      campaignTitle: 'Barrett Hodgson Product Review', 
-      clientName: 'Dr. Zeeshan', 
-      clientEmail: 'zeeshan@bhg.com', 
-      duration: '00:58', 
-      submittedAt: '2 hours ago',
       videoUrl: '#' 
     },
   ])
@@ -65,6 +48,11 @@ export default function TestimonialDashboard() {
   )
 
   useEffect(() => {
+    // Automatically detect current domain (Vercel or Localhost)
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin)
+    }
+
     let isMounted = true
     async function checkUser() {
       try {
@@ -89,17 +77,19 @@ export default function TestimonialDashboard() {
     router.push('/login')
   }
 
-  // Create Campaign Handler
+  // Create Campaign Handler with correct /review/ path & live domain
   const handleCreateCampaign = (e: React.FormEvent) => {
     e.preventDefault()
     if (!campaignTitle) return
 
-    const uniqueId = `cmp_${Math.random().toString(36).substring(2, 7)}`
+    const uniqueId = `han-bhai-${Math.random().toString(36).substring(2, 7)}`
+    const generatedLink = `${baseUrl}/review/${uniqueId}`
+
     const newCampaign = {
       id: uniqueId,
       title: campaignTitle,
       expiry: expiryDate || 'No Expiry',
-      link: `https://videoreview.app/record/${uniqueId}`,
+      link: generatedLink,
       submissions: 0,
       status: 'Active'
     }
@@ -110,12 +100,10 @@ export default function TestimonialDashboard() {
     setIsModalOpen(false)
   }
 
-  // Delete Campaign Handler
   const handleDeleteCampaign = (id: string) => {
     setCampaigns(campaigns.filter(c => c.id !== id))
   }
 
-  // Copy Link to Clipboard
   const handleCopyLink = (link: string) => {
     navigator.clipboard.writeText(link)
     alert('Client recording link copied to clipboard!')
@@ -140,7 +128,7 @@ export default function TestimonialDashboard() {
           </div>
           <div>
             <span className="font-bold text-sm tracking-tight text-white block">VideoTestimonial Hub</span>
-            <span className="text-[10px] text-indigo-400 font-mono">SECURE HTTPS NODE</span>
+            <span className="text-[10px] text-indigo-400 font-mono">LIVE VERCEL NODE</span>
           </div>
         </div>
 
@@ -174,13 +162,12 @@ export default function TestimonialDashboard() {
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-6">
         
-        {/* TAB 1: CAMPAIGNS */}
         {activeTab === 'campaigns' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-sm font-bold text-white">Video Testimonial Campaigns</h2>
-                <p className="text-xs text-slate-400">Create campaigns, set link expiry dates, and send recording links to your clients.</p>
+                <p className="text-xs text-slate-400">Links will automatically use your live Vercel domain with `/review/` path.</p>
               </div>
               <button 
                 onClick={() => setIsModalOpen(true)}
@@ -225,12 +212,11 @@ export default function TestimonialDashboard() {
           </div>
         )}
 
-        {/* TAB 2: SUBMISSIONS */}
         {activeTab === 'submissions' && (
           <div className="space-y-6">
             <div>
               <h2 className="text-sm font-bold text-white">Recorded Client Video Submissions</h2>
-              <p className="text-xs text-slate-400">Review, playback, and download video testimonials sent by your clients.</p>
+              <p className="text-xs text-slate-400">Review video testimonials sent by clients.</p>
             </div>
 
             <div className="space-y-3">
@@ -263,7 +249,7 @@ export default function TestimonialDashboard() {
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Create Testimonial Campaign</h3>
-            <p className="text-xs text-slate-400">Set up a new recording link with an optional expiration date for clients.</p>
+            <p className="text-xs text-slate-400">Generate a live recording link on your Vercel deployment.</p>
             
             <form onSubmit={handleCreateCampaign} className="space-y-4">
               <div>
@@ -285,16 +271,6 @@ export default function TestimonialDashboard() {
                   value={expiryDate}
                   onChange={(e) => setExpiryDate(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Welcome Prompt for Client</label>
-                <textarea 
-                  rows={3}
-                  value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
                 />
               </div>
 
