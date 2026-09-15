@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-// Enterprise Dynamic Base URL Resolver (Supports Local, Staging, and Production Vercel/Custom Domains)
+// Enterprise Dynamic Base URL Resolver
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return `https://${process.env.NEXT_PUBLIC_SITE_URL.replace(/^https?:\/\//, '')}`
@@ -18,6 +18,7 @@ function getBaseUrl() {
 export async function createCampaign(formData: FormData) {
   const cookieStore = await cookies()
   
+  // 🔑 FIX: Correct Supabase SSR Cookie Handlers for Server Actions
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -25,6 +26,20 @@ export async function createCampaign(formData: FormData) {
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          try {
+            cookieStore.set({ name, value, ...options })
+          } catch (error) {
+            // Handled for Server Components context if needed
+          }
+        },
+        remove(name: string, options: any) {
+          try {
+            cookieStore.set({ name, value: '', ...options })
+          } catch (error) {
+            // Handled for Server Components context if needed
+          }
         },
       },
     }
@@ -48,7 +63,7 @@ export async function createCampaign(formData: FormData) {
   // Parse expiry date properly if provided
   const expires_at = expiresAtInput ? new Date(expiresAtInput).toISOString() : null
 
-  // 2. Enterprise Robust Slug Generation (Collision-resistant & sanitized)
+  // 2. Enterprise Robust Slug Generation
   const baseSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -64,7 +79,7 @@ export async function createCampaign(formData: FormData) {
       title,
       prompt_question,
       slug,
-      user_id: user.id, // Injected securely from verified session context
+      user_id: user.id,
       expires_at
     })
     .select()
@@ -77,7 +92,7 @@ export async function createCampaign(formData: FormData) {
 
   revalidatePath('/dashboard')
 
-  // 4. Return Structured Enterprise Payload with Absolute Production-Ready Review URL
+  // 4. Return Structured Enterprise Payload
   const baseUrl = getBaseUrl()
   return {
     success: true,
