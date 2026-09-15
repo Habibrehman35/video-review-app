@@ -23,8 +23,10 @@ interface Submission {
   status?: string
   created_at: string
   campaigns?: {
+    id: string
     title: string
-  }
+    user_id: string
+  } | null
 }
 
 export default function TestimonialDashboard() {
@@ -67,7 +69,7 @@ export default function TestimonialDashboard() {
         }
         if (isMounted) setUser(user)
 
-        // 1. Fetch Campaigns strictly tied to the logged-in user
+        // 1. Fetch Campaigns for this user
         const { data: campaignData, error: campError } = await supabase
           .from('campaigns')
           .select('*')
@@ -77,28 +79,42 @@ export default function TestimonialDashboard() {
         if (!campError && campaignData && isMounted) {
           setCampaigns(campaignData)
 
-          // 2. Fetch Submissions corresponding to these specific campaigns
-          const campaignIds = campaignData.map(c => c.id)
+          // 2. Fetch Submissions via direct join or matching with user campaigns
+          const { data: subData, error: subError } = await supabase
+            .from('submissions')
+            .select(`
+              *,
+              campaigns!inner (
+                id,
+                title,
+                user_id
+              )
+            `)
+            .eq('campaigns.user_id', user.id)
+            .order('created_at', { ascending: false })
 
-          if (campaignIds.length > 0) {
-            const { data: subData, error: subError } = await supabase
+          if (!subError && subData && isMounted) {
+            setSubmissions(subData as Submission[])
+          } else if (subError) {
+            console.error('Submissions fetch error (falling back):', subError.message)
+            // Fallback: Fetch all submissions and filter manually if inner join fails due to relation configuration
+            const { data: fallbackSubs } = await supabase
               .from('submissions')
               .select('*')
-              .in('campaign_id', campaignIds)
               .order('created_at', { ascending: false })
 
-            if (!subError && subData && isMounted) {
-              const formattedSubmissions = subData.map(sub => {
-                const matchedCamp = campaignData.find(c => c.id === sub.campaign_id)
+            if (fallbackSubs && isMounted) {
+              const campaignIds = campaignData.map(c => c.id)
+              const filtered = fallbackSubs.filter(sub => campaignIds.includes(sub.campaign_id))
+              const formatted = filtered.map(sub => {
+                const matched = campaignData.find(c => c.id === sub.campaign_id)
                 return {
                   ...sub,
-                  campaigns: { title: matchedCamp?.title || 'Review Campaign' }
+                  campaigns: matched ? { id: matched.id, title: matched.title, user_id: matched.user_id } : null
                 }
               })
-              setSubmissions(formattedSubmissions)
+              setSubmissions(formatted)
             }
-          } else {
-            setSubmissions([])
           }
         }
 
