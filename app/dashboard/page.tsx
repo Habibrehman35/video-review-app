@@ -60,15 +60,22 @@ export default async function DashboardPage() {
   const campaignList: Campaign[] = campaigns || []
   const campaignIds = campaignList.map((c) => c.id)
 
-  // Fetch testimonials safely
+  // Fetch testimonials safely with try/catch and fallback select to prevent 500 errors
   let testimonials: Testimonial[] = []
   if (campaignIds.length > 0) {
-    const { data: tData } = await supabase
-      .from('testimonials')
-      .select('*, campaigns(title)')
-      .in('campaign_id', campaignIds)
-      .order('created_at', { ascending: false })
-    testimonials = (tData as Testimonial[]) || []
+    try {
+      const { data: tData, error: tError } = await supabase
+        .from('testimonials')
+        .select('*')
+        .in('campaign_id', campaignIds)
+        .order('created_at', { ascending: false })
+
+      if (!tError && tData) {
+        testimonials = tData as Testimonial[]
+      }
+    } catch (err) {
+      console.error('Error fetching testimonials:', err)
+    }
   }
 
   const totalCampaigns = campaignList.length
