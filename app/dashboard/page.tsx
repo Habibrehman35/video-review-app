@@ -4,41 +4,43 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 
+interface Campaign {
+  id: string
+  title: string
+  slug: string
+  expires_at?: string | null
+  created_at?: string
+}
+
+interface Submission {
+  id: string
+  campaign_id: string
+  client_name?: string
+  client_email?: string
+  duration?: string
+  video_url: string
+  created_at: string
+  campaigns?: {
+    title: string
+  }
+}
+
 export default function TestimonialDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions'>('campaigns')
   
+  // Real Database States
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   // Campaign Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [campaignTitle, setCampaignTitle] = useState('')
+  const [promptQuestion, setPromptQuestion] = useState('How was your overall experience working with our team?')
   const [expiryDate, setExpiryDate] = useState('')
-  const [baseUrl, setBaseUrl] = useState('https://video-review-74lcd430w-habibrehman35.vercel.app')
-
-  // Campaigns State
-  const [campaigns, setCampaigns] = useState([
-    { 
-      id: 'han-bhai-4h9qx', 
-      title: 'Salim Winding Tech - Client Feedback', 
-      expiry: '2026-04-15', 
-      link: 'https://video-review-74lcd430w-habibrehman35.vercel.app/review/han-bhai-4h9qx', 
-      submissions: 4, 
-      status: 'Active' 
-    },
-  ])
-
-  // Submissions State
-  const [submissions, setSubmissions] = useState([
-    { 
-      id: 'sub_101', 
-      campaignTitle: 'Salim Winding Tech - Client Feedback', 
-      clientName: 'Ahmed Ali', 
-      clientEmail: 'ahmed@example.com', 
-      duration: '01:45', 
-      submittedAt: '10 mins ago',
-      videoUrl: '#' 
-    },
-  ])
+  const [baseUrl, setBaseUrl] = useState('')
 
   const router = useRouter()
 
@@ -48,28 +50,55 @@ export default function TestimonialDashboard() {
   )
 
   useEffect(() => {
-    // Automatically detect current domain (Vercel or Localhost)
     if (typeof window !== 'undefined') {
       setBaseUrl(window.location.origin)
     }
 
     let isMounted = true
-    async function checkUser() {
+
+    async function loadDashboardData() {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser()
-        if (error || !user) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) {
           router.push('/login')
           return
         }
         if (isMounted) setUser(user)
+
+        // 1. Fetch Campaigns from Supabase for this user
+        const { data: campaignData, error: campError } = await supabase
+          .from('campaigns')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (!campError && campaignData && isMounted) {
+          setCampaigns(campaignData)
+        }
+
+        // 2. Fetch Video Submissions for user's campaigns
+        // Assuming submissions table has campaign relationship or user linkage
+        const { data: subData, error: subError } = await supabase
+          .from('submissions')
+          .select('*, campaigns(title)')
+          .order('created_at', { ascending: false })
+
+        if (!subError && subData && isMounted) {
+          setSubmissions(subData)
+        }
+
       } catch (err) {
-        console.error('Auth error:', err)
+        console.error('Error loading dashboard data:', err)
       } finally {
         if (isMounted) setLoading(false)
       }
     }
-    checkUser()
-    return () => { isMounted = false }
+
+    loadDashboardData()
+
+    return () => { 
+      isMounted = false 
+    }
   }, [router, supabase])
 
   const handleSignOut = async () => {
@@ -77,35 +106,72 @@ export default function TestimonialDashboard() {
     router.push('/login')
   }
 
-  // Create Campaign Handler with correct /review/ path & live domain
-  const handleCreateCampaign = (e: React.FormEvent) => {
+  // Real Database Campaign Creation
+  const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!campaignTitle) return
+    if (!campaignTitle || !user) return
 
-    const uniqueId = `han-bhai-${Math.random().toString(36).substring(2, 7)}`
-    const generatedLink = `${baseUrl}/review/${uniqueId}`
+    setIsSubmitting(true)
+    try {
+      const baseSlug = campaignTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      
+      const uniqueSlug = `${baseSlug || 'campaign'}-${Math.random().toString(36).substring(2, 7)}`
+      const expires_at = expiryDate ? new Date(expiryDate).toISOString() : null
 
-    const newCampaign = {
-      id: uniqueId,
-      title: campaignTitle,
-      expiry: expiryDate || 'No Expiry',
-      link: generatedLink,
-      submissions: 0,
-      status: 'Active'
+      const { data: newCampaign, error: insertError } = await supabase
+        .from('campaigns')
+        .insert({
+          user_id: user.id,
+          title: campaignTitle,
+          prompt_question: promptQuestion,
+          slug: uniqueSlug,
+          expires_at: expires_at
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        alert(`Failed to create campaign: ${insertError.message}`)
+        return
+      }
+
+      if (newCampaign) {
+        setCampaigns([newCampaign, ...campaigns])
+        setCampaignTitle('')
+        setPromptQuestion('How was your overall experience working with our team?')
+        setExpiryDate('')
+        setIsModalOpen(false)
+      }
+    } catch (err: any) {
+      console.error('Creation error:', err)
+      alert('An unexpected error occurred while creating the campaign.')
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setCampaigns([newCampaign, ...campaigns])
-    setCampaignTitle('')
-    setExpiryDate('')
-    setIsModalOpen(false)
   }
 
-  const handleDeleteCampaign = (id: string) => {
+  const handleDeleteCampaign = async (id: string, slug: string) => {
+    if (!confirm('Are you sure you want to delete this campaign?')) return
+
+    const { error } = await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      alert(`Delete failed: ${error.message}`)
+      return
+    }
+
     setCampaigns(campaigns.filter(c => c.id !== id))
   }
 
-  const handleCopyLink = (link: string) => {
-    navigator.clipboard.writeText(link)
+  const handleCopyLink = (slug: string) => {
+    const fullLink = `${baseUrl}/review/${slug}`
+    navigator.clipboard.writeText(fullLink)
     alert('Client recording link copied to clipboard!')
   }
 
@@ -128,7 +194,7 @@ export default function TestimonialDashboard() {
           </div>
           <div>
             <span className="font-bold text-sm tracking-tight text-white block">VideoTestimonial Hub</span>
-            <span className="text-[10px] text-indigo-400 font-mono">LIVE VERCEL NODE</span>
+            <span className="text-[10px] text-indigo-400 font-mono">LIVE DATABASE CONNECTED</span>
           </div>
         </div>
 
@@ -167,7 +233,7 @@ export default function TestimonialDashboard() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-sm font-bold text-white">Video Testimonial Campaigns</h2>
-                <p className="text-xs text-slate-400">Links will automatically use your live Vercel domain with `/review/` path.</p>
+                <p className="text-xs text-slate-400">Manage your active review funnels stored securely in Supabase.</p>
               </div>
               <button 
                 onClick={() => setIsModalOpen(true)}
@@ -177,38 +243,51 @@ export default function TestimonialDashboard() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {campaigns.map(camp => (
-                <div key={camp.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{camp.status}</span>
-                      <span className="text-xs text-slate-400 font-mono">Expires: {camp.expiry}</span>
-                    </div>
-                    <h3 className="text-sm font-bold text-white">{camp.title}</h3>
-                    <p className="text-xs text-indigo-400 font-mono break-all">{camp.link}</p>
-                  </div>
+            {campaigns.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
+                <p className="text-sm text-slate-300 font-semibold">No campaigns found.</p>
+                <p className="text-xs text-slate-500">Click &quot;Create New Campaign&quot; to generate your first review link.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {campaigns.map(camp => {
+                  const reviewLink = `${baseUrl}/review/${camp.slug}`
+                  const isExpired = camp.expires_at ? new Date(camp.expires_at) < new Date() : false
 
-                  <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
-                    <span className="text-xs text-slate-300 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-                      Submissions: <b>{camp.submissions}</b>
-                    </span>
-                    <button 
-                      onClick={() => handleCopyLink(camp.link)}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-all"
-                    >
-                      Copy Link
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteCampaign(camp.id)}
-                      className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium rounded-lg transition-all"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  return (
+                    <div key={camp.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${isExpired ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'}`}>
+                            {isExpired ? 'Expired' : 'Active'}
+                          </span>
+                          <span className="text-xs text-slate-400 font-mono">
+                            Expires: {camp.expires_at ? new Date(camp.expires_at).toLocaleDateString() : 'Never'}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-bold text-white">{camp.title}</h3>
+                        <p className="text-xs text-indigo-400 font-mono break-all">{reviewLink}</p>
+                      </div>
+
+                      <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+                        <button 
+                          onClick={() => handleCopyLink(camp.slug)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-all"
+                        >
+                          Copy Link
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteCampaign(camp.id, camp.slug)}
+                          className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium rounded-lg transition-all"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -216,29 +295,43 @@ export default function TestimonialDashboard() {
           <div className="space-y-6">
             <div>
               <h2 className="text-sm font-bold text-white">Recorded Client Video Submissions</h2>
-              <p className="text-xs text-slate-400">Review video testimonials sent by clients.</p>
+              <p className="text-xs text-slate-400">Review video testimonials sent by clients through your campaign links.</p>
             </div>
 
-            <div className="space-y-3">
-              {submissions.map(sub => (
-                <div key={sub.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-indigo-400">{sub.campaignTitle}</span>
-                    <h3 className="text-sm font-bold text-white">{sub.clientName} <span className="text-xs text-slate-400 font-normal">({sub.clientEmail})</span></h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Duration: {sub.duration} • Submitted: {sub.submittedAt}</p>
-                  </div>
+            {submissions.length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
+                <p className="text-sm text-slate-300 font-semibold">No video submissions yet.</p>
+                <p className="text-xs text-slate-500">When clients record and submit reviews, they will appear here instantly.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {submissions.map(sub => (
+                  <div key={sub.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium text-indigo-400">{sub.campaigns?.title || 'Review Campaign'}</span>
+                      <h3 className="text-sm font-bold text-white">
+                        {sub.clientName || 'Anonymous Client'} 
+                        {sub.clientEmail && <span className="text-xs text-slate-400 font-normal"> ({sub.clientEmail})</span>}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Submitted: {new Date(sub.created_at).toLocaleString()}
+                      </p>
+                    </div>
 
-                  <div className="flex items-center space-x-3">
-                    <button 
-                      onClick={() => alert(`Playing video review for ${sub.clientName}`)}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg transition-all"
-                    >
-                      ▶ Watch Video
-                    </button>
+                    <div className="flex items-center space-x-3">
+                      <a 
+                        href={sub.video_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg transition-all"
+                      >
+                        ▶ Watch Video
+                      </a>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -249,7 +342,7 @@ export default function TestimonialDashboard() {
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Create Testimonial Campaign</h3>
-            <p className="text-xs text-slate-400">Generate a live recording link on your Vercel deployment.</p>
+            <p className="text-xs text-slate-400">Generate a live recording link connected directly to your database.</p>
             
             <form onSubmit={handleCreateCampaign} className="space-y-4">
               <div>
@@ -265,7 +358,18 @@ export default function TestimonialDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Link Expiry Date</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Prompt Question for Clients</label>
+                <textarea 
+                  rows={2}
+                  value={promptQuestion}
+                  onChange={(e) => setPromptQuestion(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Link Expiry Date (Optional)</label>
                 <input 
                   type="date" 
                   value={expiryDate}
@@ -284,9 +388,10 @@ export default function TestimonialDashboard() {
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg disabled:opacity-50"
                 >
-                  Generate Link
+                  {isSubmitting ? 'Saving...' : 'Generate Link'}
                 </button>
               </div>
             </form>
