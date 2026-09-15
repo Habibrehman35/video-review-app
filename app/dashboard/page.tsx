@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 interface Campaign {
   id: string
+  user_id: string
   title: string
   slug: string
   expires_at?: string | null
@@ -19,6 +20,7 @@ interface Submission {
   client_email?: string
   duration?: string
   video_url: string
+  status?: string
   created_at: string
   campaigns?: {
     title: string
@@ -65,7 +67,7 @@ export default function TestimonialDashboard() {
         }
         if (isMounted) setUser(user)
 
-        // 1. Fetch Campaigns from Supabase for this user
+        // 1. Fetch Campaigns strictly tied to the logged-in user
         const { data: campaignData, error: campError } = await supabase
           .from('campaigns')
           .select('*')
@@ -75,7 +77,7 @@ export default function TestimonialDashboard() {
         if (!campError && campaignData && isMounted) {
           setCampaigns(campaignData)
 
-          // 2. Fetch Submissions securely tied to this user's campaigns
+          // 2. Fetch Submissions corresponding to these specific campaigns
           const campaignIds = campaignData.map(c => c.id)
 
           if (campaignIds.length > 0) {
@@ -180,6 +182,7 @@ export default function TestimonialDashboard() {
     }
 
     setCampaigns(campaigns.filter(c => c.id !== id))
+    setSubmissions(submissions.filter(s => s.campaign_id !== id))
   }
 
   const handleCopyLink = (slug: string) => {
