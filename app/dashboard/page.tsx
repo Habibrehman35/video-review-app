@@ -284,7 +284,7 @@ export default async function DashboardPage() {
                         <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
                           <span className="block text-[9px] text-slate-500 uppercase">Expires</span>
                           <span className={isExpired ? 'text-red-400 font-bold' : 'text-emerald-400'}>
-                            {formatDate(camp.expires_at)}
+                            {camp.expires_at ? formatDate(camp.expires_at) : 'No Expiry'}
                           </span>
                         </div>
                       </div>
