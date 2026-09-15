@@ -30,8 +30,8 @@ export default function LoginPage() {
       setError(error.message)
       setLoading(false)
     } else {
-      router.push('/dashboard')
-      router.refresh()
+      // Hard refresh and redirect to force cookie sync
+      window.location.href = '/dashboard'
     }
   }
 
