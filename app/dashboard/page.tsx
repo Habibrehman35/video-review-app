@@ -33,7 +33,6 @@ interface Testimonial {
 export default async function DashboardPage() {
   const cookieStore = await cookies()
   
-  // Server Component mein sirf 'get' use hota hai, set/remove nahi!
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
