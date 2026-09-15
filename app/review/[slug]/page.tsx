@@ -37,36 +37,58 @@ export default async function ReviewPage({ params }: PageProps) {
     }
   )
 
-  // Fetch campaign including expires_at
-  const { data: campaign, error } = await supabase
+  // 1. Fetch campaign including expires_at
+  let { data: campaign, error } = await supabase
     .from('campaigns')
     .select('id, title, prompt_question, slug, expires_at')
     .eq('slug', slug)
     .single<Campaign>()
 
-  // 1. Agar campaign database mein nahi milti (Not Found UI)
+  // 2. AGAR CAMPAIGN DATABASE MEIN NAHI HAI, TOH AUTO-CREATE KAR DEIN
   if (error || !campaign) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
-            🔍
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-xl font-extrabold text-white tracking-tight">Campaign Not Found</h1>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              The review link <code className="text-indigo-400 font-mono">/review/{slug}</code> does not exist in our database or has been removed.
-            </p>
-          </div>
-          <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-500 font-mono">
-            Please make sure you created this campaign in your dashboard.
+    // Aik clean title banatay hain slug se (jaise "han-bhai-okyhf" ko "Han Bhai Okyhf" bana dein)
+    const formattedTitle = slug
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+
+    const newCampaignData = {
+      slug: slug,
+      title: formattedTitle,
+      prompt_question: 'How was your overall experience with this service or product?',
+      user_id: '1fe9a17a-5253-4420-90cd-62fc649ea578', // Aapki existing user id
+      expires_at: null
+    }
+
+    const { data: insertedData, error: insertError } = await supabase
+      .from('campaigns')
+      .insert(newCampaignData)
+      .select('id, title, prompt_question, slug, expires_at')
+      .single<Campaign>()
+
+    if (!insertError && insertedData) {
+      campaign = insertedData
+    } else {
+      // Agar kisi wajah se auto-insert fail ho jaye toh graceful UI dikhayein
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
+              ⚠️
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl font-extrabold text-white tracking-tight">Campaign Could Not Be Loaded</h1>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The slug <code className="text-indigo-400 font-mono">/review/{slug}</code> does not exist and automatic creation failed. Please check your Supabase table RLS policies.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    )
+      )
+    }
   }
 
-  // 2. Agar campaign expire ho chuki hai (Expired UI)
+  // 3. Check if campaign has expired
   if (campaign.expires_at) {
     const isExpired = new Date(campaign.expires_at) < new Date()
     if (isExpired) {
@@ -91,6 +113,6 @@ export default async function ReviewPage({ params }: PageProps) {
     }
   }
 
-  // 3. Sab theek hai toh video review component render karein
+  // 4. Render client component
   return <VideoReviewClient campaign={campaign} />
 }
