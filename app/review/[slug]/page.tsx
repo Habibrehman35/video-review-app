@@ -3,6 +3,10 @@ import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 import VideoReviewClient from './VideoReviewClient'
 
+// Force dynamic rendering and disable caching so newly created slugs work instantly
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface PageProps {
   params: Promise<{
     slug: string
@@ -42,6 +46,7 @@ export default async function ReviewPage({ params }: PageProps) {
     .single<Campaign>()
 
   if (error || !campaign) {
+    console.error('Campaign fetch error for slug:', slug, error)
     notFound()
   }
 
