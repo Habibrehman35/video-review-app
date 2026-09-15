@@ -78,44 +78,26 @@ export default function TestimonialDashboard() {
 
         if (!campError && campaignData && isMounted) {
           setCampaigns(campaignData)
+        }
 
-          // 2. Fetch Submissions via direct join or matching with user campaigns
-          const { data: subData, error: subError } = await supabase
-            .from('submissions')
-            .select(`
-              *,
-              campaigns!inner (
-                id,
-                title,
-                user_id
-              )
-            `)
-            .eq('campaigns.user_id', user.id)
-            .order('created_at', { ascending: false })
+        // 2. Fetch Submissions directly using user_id so they stay safe even if campaigns are deleted
+        const { data: subData, error: subError } = await supabase
+          .from('submissions')
+          .select(`
+            *,
+            campaigns (
+              id,
+              title,
+              user_id
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
 
-          if (!subError && subData && isMounted) {
-            setSubmissions(subData as Submission[])
-          } else if (subError) {
-            console.error('Submissions fetch error (falling back):', subError.message)
-            // Fallback: Fetch all submissions and filter manually if inner join fails due to relation configuration
-            const { data: fallbackSubs } = await supabase
-              .from('submissions')
-              .select('*')
-              .order('created_at', { ascending: false })
-
-            if (fallbackSubs && isMounted) {
-              const campaignIds = campaignData.map(c => c.id)
-              const filtered = fallbackSubs.filter(sub => sub.campaign_id && campaignIds.includes(sub.campaign_id))
-              const formatted = filtered.map(sub => {
-                const matched = campaignData.find(c => c.id === sub.campaign_id)
-                return {
-                  ...sub,
-                  campaigns: matched ? { id: matched.id, title: matched.title, user_id: matched.user_id } : null
-                }
-              })
-              setSubmissions(formatted)
-            }
-          }
+        if (!subError && subData && isMounted) {
+          setSubmissions(subData as Submission[])
+        } else if (subError) {
+          console.error('Submissions fetch error:', subError.message)
         }
 
       } catch (err) {
@@ -134,12 +116,9 @@ export default function TestimonialDashboard() {
 
   const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('Sign out error:', error.message)
-      }
+      await supabase.auth.signOut()
     } catch (err) {
-      console.error('Unexpected error during sign out:', err)
+      console.error('Sign out error:', err)
     } finally {
       if (typeof window !== 'undefined') {
         localStorage.clear()
@@ -201,17 +180,13 @@ export default function TestimonialDashboard() {
   const handleDeleteCampaign = async (id: string) => {
     if (!confirm('Are you sure you want to delete this campaign? (Aapki video submissions safe rahengi)')) return
 
-    // 1. Pehle sub-missions ka campaign_id disconnect kar dein taake wo database se delete na hon
-    const { error: updateSubError } = await supabase
+    // 1. Submissions ka campaign_id disconnect kar dein taake database mein koi constraint error na aaye
+    await supabase
       .from('submissions')
       .update({ campaign_id: null })
       .eq('campaign_id', id)
 
-    if (updateSubError) {
-      console.error('Error unlinking submissions:', updateSubError.message)
-    }
-
-    // 2. Ab campaign ko safely delete karein
+    // 2. Campaign ko delete karein
     const { error } = await supabase
       .from('campaigns')
       .delete()
@@ -225,7 +200,7 @@ export default function TestimonialDashboard() {
     // Campaigns state se remove karein
     setCampaigns(campaigns.filter(c => c.id !== id))
     
-    // Submissions state mein us campaign ki videos ko safe rakhein aur campaign link ko null kar dein
+    // Submissions state mein us campaign ke reference ko null kar dein taake UI kharab na ho
     setSubmissions(submissions.map(sub => 
       sub.campaign_id === id ? { ...sub, campaign_id: null, campaigns: null } : sub
     ))
