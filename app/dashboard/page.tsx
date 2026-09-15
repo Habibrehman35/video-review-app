@@ -15,7 +15,7 @@ interface Campaign {
 
 interface Submission {
   id: string
-  campaign_id: string
+  campaign_id: string | null
   client_name?: string
   client_email?: string
   duration?: string
@@ -105,7 +105,7 @@ export default function TestimonialDashboard() {
 
             if (fallbackSubs && isMounted) {
               const campaignIds = campaignData.map(c => c.id)
-              const filtered = fallbackSubs.filter(sub => campaignIds.includes(sub.campaign_id))
+              const filtered = fallbackSubs.filter(sub => sub.campaign_id && campaignIds.includes(sub.campaign_id))
               const formatted = filtered.map(sub => {
                 const matched = campaignData.find(c => c.id === sub.campaign_id)
                 return {
@@ -184,9 +184,11 @@ export default function TestimonialDashboard() {
     }
   }
 
+  // Updated Delete Handler: Campaign delete hoga lekin submissions safe rahengi
   const handleDeleteCampaign = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this campaign?')) return
+    if (!confirm('Are you sure you want to delete this campaign? (Aapki video submissions safe rahengi)')) return
 
+    // Campaign delete karein (Supabase table mein FK par ON DELETE SET NULL hona chahiye)
     const { error } = await supabase
       .from('campaigns')
       .delete()
@@ -197,8 +199,15 @@ export default function TestimonialDashboard() {
       return
     }
 
+    // Campaigns state se remove karein
     setCampaigns(campaigns.filter(c => c.id !== id))
-    setSubmissions(submissions.filter(s => s.campaign_id !== id))
+    
+    // Submissions state mein us campaign ki videos ko safe rakhein aur campaign link ko null kar dein
+    setSubmissions(submissions.map(sub => 
+      sub.campaign_id === id ? { ...sub, campaign_id: null, campaigns: null } : sub
+    ))
+
+    alert('Campaign deleted successfully! Your video submissions are safe.')
   }
 
   const handleCopyLink = (slug: string) => {
@@ -340,7 +349,9 @@ export default function TestimonialDashboard() {
                 {submissions.map(sub => (
                   <div key={sub.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="space-y-1">
-                      <span className="text-xs font-medium text-indigo-400">{sub.campaigns?.title || 'Review Campaign'}</span>
+                      <span className="text-xs font-medium text-indigo-400">
+                        {sub.campaigns?.title || 'Deleted Campaign (Review Safe)'}
+                      </span>
                       <h3 className="text-sm font-bold text-white">
                         {sub.client_name || 'Anonymous Client'} 
                         {sub.client_email && <span className="text-xs text-slate-400 font-normal"> ({sub.client_email})</span>}
