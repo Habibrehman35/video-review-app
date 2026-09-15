@@ -74,16 +74,30 @@ export default function TestimonialDashboard() {
 
         if (!campError && campaignData && isMounted) {
           setCampaigns(campaignData)
-        }
 
-        // 2. Fetch Video Submissions for user's campaigns
-        const { data: subData, error: subError } = await supabase
-          .from('submissions')
-          .select('*, campaigns(title)')
-          .order('created_at', { ascending: false })
+          // 2. Fetch Submissions securely tied to this user's campaigns
+          const campaignIds = campaignData.map(c => c.id)
 
-        if (!subError && subData && isMounted) {
-          setSubmissions(subData)
+          if (campaignIds.length > 0) {
+            const { data: subData, error: subError } = await supabase
+              .from('submissions')
+              .select('*')
+              .in('campaign_id', campaignIds)
+              .order('created_at', { ascending: false })
+
+            if (!subError && subData && isMounted) {
+              const formattedSubmissions = subData.map(sub => {
+                const matchedCamp = campaignData.find(c => c.id === sub.campaign_id)
+                return {
+                  ...sub,
+                  campaigns: { title: matchedCamp?.title || 'Review Campaign' }
+                }
+              })
+              setSubmissions(formattedSubmissions)
+            }
+          } else {
+            setSubmissions([])
+          }
         }
 
       } catch (err) {
