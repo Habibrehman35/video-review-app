@@ -1,9 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { notFound } from 'next/navigation'
 import VideoReviewClient from './VideoReviewClient'
 
-// Force dynamic rendering and disable caching so newly created slugs work instantly
+// Force dynamic rendering and disable caching
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -45,12 +44,29 @@ export default async function ReviewPage({ params }: PageProps) {
     .eq('slug', slug)
     .single<Campaign>()
 
+  // 1. Agar campaign database mein nahi milti (Not Found UI)
   if (error || !campaign) {
-    console.error('Campaign fetch error for slug:', slug, error)
-    notFound()
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
+            🔍
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-white tracking-tight">Campaign Not Found</h1>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              The review link <code className="text-indigo-400 font-mono">/review/{slug}</code> does not exist in our database or has been removed.
+            </p>
+          </div>
+          <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-500 font-mono">
+            Please make sure you created this campaign in your dashboard.
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  // Check if campaign has expired
+  // 2. Agar campaign expire ho chuki hai (Expired UI)
   if (campaign.expires_at) {
     const isExpired = new Date(campaign.expires_at) < new Date()
     if (isExpired) {
@@ -75,5 +91,6 @@ export default async function ReviewPage({ params }: PageProps) {
     }
   }
 
+  // 3. Sab theek hai toh video review component render karein
   return <VideoReviewClient campaign={campaign} />
 }
